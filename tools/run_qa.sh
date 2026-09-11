@@ -8,6 +8,15 @@ if [ ! -f .next/BUILD_ID ]; then
   npm run build
 fi
 echo "== starting next on :$PORT =="
+# A stale `next start` from an earlier run can hold the port and serve an old (broken) build,
+# which shows up as a frozen page and 500s. Free the port first.
+if ss -ltnp 2>/dev/null | grep -q ":$PORT "; then
+  echo "   port :$PORT is busy — stopping the stale server"
+  for pid in $(ss -ltnp 2>/dev/null | grep ":$PORT " | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
+    kill "$pid" 2>/dev/null || true
+  done
+  sleep 2
+fi
 npx next start -p "$PORT" >/tmp/aurora-ink-server.log 2>&1 &
 SRV=$!
 trap 'kill $SRV 2>/dev/null || true' EXIT

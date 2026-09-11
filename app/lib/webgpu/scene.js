@@ -27,12 +27,12 @@ const RIPPLE_LIFE = 5.0; // seconds — matches the ~4-6 s growing/fading energy
 const PARTICLE_FLOATS = PARTICLE_CAPACITY * 6;
 const PARTICLE_BYTES = PARTICLE_FLOATS * 4;
 
-// Kept in lock-step with the WGSL `particlesUpdate` formula. The upper bound is deliberately
-// modest: particles are an accent (soft drifting motes), not the subject — the ink is. A low
-// count also keeps the software Vulkan adapter used by the verification harness tractable.
-function particleCount(density) {
+// Kept in lock-step with the WGSL `particlesUpdate` formula: a resolution-scaled mote density
+// (~one per 18 px^2 at full density) so the count feels the same at any canvas size. Capped at the
+// allocation. Kept modest so particles read as sparse drifting light, not a starfield.
+function particleCount(density, width, height) {
   const d = Math.min(1, Math.max(0, density));
-  const n = Math.round(800 + 5000 * Math.pow(d, 1.4));
+  const n = Math.round(width * height * 0.055 * (0.25 + 0.75 * d));
   return Math.min(n, PARTICLE_CAPACITY);
 }
 
@@ -101,7 +101,9 @@ export function createGPUScene(device, { format, width, height, config }) {
       data[o + 1] = Math.random();
       data[o + 2] = 0;
       data[o + 3] = 0;
-      data[o + 4] = Math.random();
+      // Short initial life so the very first seconds already recycle particles onto the aurora
+      // bands instead of leaving a uniform first-generation dusting on screen.
+      data[o + 4] = Math.random() * 0.3;
       data[o + 5] = Math.random();
     }
     device.queue.writeBuffer(particleBuffer, 0, data);
@@ -321,7 +323,7 @@ export function createGPUScene(device, { format, width, height, config }) {
     advanceRipples(step);
     writeUniforms(step);
 
-    const count = particleCount(state.density);
+    const count = particleCount(state.density, width_, height_);
     const enc = device.createCommandEncoder({ label: "aurora-sim" });
 
     // 1. velocity flow field (reads velIn, writes the other ping-pong target)

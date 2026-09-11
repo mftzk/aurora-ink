@@ -103,7 +103,35 @@ export function createCanvas2DRenderer(canvas, initialConfig) {
       ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
     }
 
-    // Particles advected by a cheap curl-ish field, drawn as short light traces.
+    // Aurora ribbons: three long, soft, gently bending bands. Each one is a few parallel,
+    // very low-alpha strokes that share the same curve, which softens the edge the way the
+    // GPU path's band profile does. This is what makes the 2D path feel like the same product.
+    for (let r = 0; r < 3; r++) {
+      const base = 0.30 + r * 0.19 + Math.sin(time * 0.05 + r * 2.1) * 0.05;
+      const amp = 0.055 + 0.03 * r;
+      const k = 1.6 + r * 0.5;
+      const drift = time * (0.012 + 0.006 * r);
+      const col = live[(r + 1) % 4];
+      const steps = 14;
+      for (let layer = 0; layer < 4; layer++) {
+        ctx.strokeStyle = rgba(col, (0.030 - layer * 0.006) * glow);
+        ctx.lineWidth = minDim * (0.075 + layer * 0.045);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        for (let i = 0; i <= steps; i++) {
+          const t01 = i / steps;
+          const x = t01 * W * 1.06 - W * 0.03;
+          const y =
+            (base + Math.sin(t01 * Math.PI * k + drift) * amp + Math.cos(t01 * 2.3 - drift * 0.7) * amp * 0.45) * H
+            + layer * minDim * 0.012;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    // Particles advected by a cheap curl-ish field, drawn as short curved light traces.
     const count = Math.min(maxParticles(), MAX_PARTICLES);
     const trail = 0.2 + state.trail * 1.6;
     for (let i = 0; i < count; i++) {
@@ -118,12 +146,23 @@ export function createCanvas2DRenderer(canvas, initialConfig) {
       if (p.x < -0.05 || p.x > 1.05 || p.y < -0.05 || p.y > 1.05 || p.life <= 0) spawn(p);
 
       const c = live[1 + (i % 3)];
-      const a = 0.16 * glow * Math.min(1, p.life * 3) * (1 - p.life * 0.4);
+      const a = 0.085 * glow * Math.min(1, p.life * 3) * (1 - p.life * 0.4);
       ctx.strokeStyle = rgba(c, Math.max(0, a));
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.0;
+      ctx.lineCap = "round";
+      // Curved mote: a shallow quadratic arc along the flow, so motes read as drifting light
+      // rather than straight scratches.
+      const sx = p.x * W;
+      const sy = p.y * H;
+      const tx = (p.x - p.vx * trail) * W;
+      const ty = (p.y - p.vy * trail) * H;
+      const nx = -(ty - sy);
+      const ny = tx - sx;
+      const nl = Math.max(1, Math.hypot(nx, ny));
+      const bend = 0.10 * trail * 60;
       ctx.beginPath();
-      ctx.moveTo(p.x * W, p.y * H);
-      ctx.lineTo((p.x - p.vx * trail) * W, (p.y - p.vy * trail) * H);
+      ctx.moveTo(sx, sy);
+      ctx.quadraticCurveTo((sx + tx) / 2 + (nx / nl) * bend, (sy + ty) / 2 + (ny / nl) * bend, tx, ty);
       ctx.stroke();
     }
 
@@ -137,9 +176,9 @@ export function createCanvas2DRenderer(canvas, initialConfig) {
         continue;
       }
       const radius = k * 0.55 * minDim;
-      const alpha = (1 - k) * 0.28 * rp.strength * glow;
+      const alpha = (1 - k) * 0.14 * rp.strength * glow;
       ctx.strokeStyle = rgba(live[2], Math.max(0, alpha));
-      ctx.lineWidth = Math.max(2, 6 * (1 - k));
+      ctx.lineWidth = Math.max(4, minDim * 0.055 * (1 - k) + 3);
       ctx.beginPath();
       ctx.arc(rp.x * W, rp.y * H, radius, 0, Math.PI * 2);
       ctx.stroke();
