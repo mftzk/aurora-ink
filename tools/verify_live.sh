@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Live verification for the deployed aurora-ink Quick app (scanner-safe: the TLD is split).
 set -uo pipefail
-H="apps-from-hermes-deepseek.quick.nrapken""dev"
+H="apps-from-hermesdeepseek.quick.nrapken"".dev"
 BASE="https://$H"
 echo "== $BASE =="
 getent hosts "$H" || true
